@@ -44,11 +44,42 @@ team_t team = {
 
 #define SIZE_T_SIZE (ALIGN(sizeof(size_t)))
 
+// 초기 가용 리스트 만들기
+
 /* 
  * mm_init - initialize the malloc package.
  */
+//초기 힙영역을 할당한다.
+
+// 기본 상수 정의
+#define WSIZE 4
+#define DSIZE 8
+#define CHUNKSIZE (1<<12)
+
+#define MAX(x,y) ((x) > (y) ? (x):(y))
+// 가용리스트에 접근하고 방문하는 작은 매크로 정의
+#define PACK(size, alloc) ((size) | (alloc))
+
+#define GET(p) (*(unsigned int *)(p))
+#define PUT(p,val) (*(unsigned int *)(p) = (val))
+
+// 각 주소 p에 있는 헤더 또는 푸터의 사이즈와 할당 비트를 리턴한다.
+#define GET_SIZE(p) (GET(p) & ~0x7)
+#define GET_ALLOC(p) (GET(p) & 0x1)
+
+// 각각 헤더와 풋터를 가리키는 포인터를 리턴한다.
+#define HDRP(bp) ((char *)(bp) - WSIZE)
+#define FTRP(bp) ((char *)(bp)+GET_SIZE(HDRP(bp)) - DSIZE)
+//ㅡ다음 블록의 블록 포인터, 이전 블록의 블록 포인터
+#define NEXT_BLKP(bp) ((char *) (bp) + GET_SIZE(((char*)(bp) - WSIZE)))
+#define PREV_BLKP(bp) ((char *)(bp) - GET_SIZE(((char*)(bp) - DSIZE)))
+
+#define GET_SIZE(p) ()
+
+
 int mm_init(void)
 {
+    
     return 0;
 }
 
