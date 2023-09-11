@@ -62,9 +62,6 @@ team_t team = {
 #define MAX(x,y) ((x) > (y) ? (x):(y))
 // 가용리스트에 접근하고 방문하는 작은 매크로 정의
 
-
-
-
 // or 연산자를 하면서 1로 바꿔주는것.
 //비트 Or 연산 :할당정보랑, 사이즈정보를 합친다
 // 사이즈값에 할당비트를 넣는느낌.. 사이즈랑 할당비트를 통합하는것
@@ -105,6 +102,7 @@ void mm_free(void *ptr);
 static void *coalesce(void *bp);
 void *mm_realloc(void *ptr, size_t size);
 static void *last_bp; // 기존값을 유지해야 하므로 static 으로 선언.
+static void *heap_listp;
 //last_bp가 업데이트 되는 경우 : 첫번쨰 init => last_bp = heap_listp로 초기화
 // place 되었을 때 bp 변경
 // coalesce로 블록 합치는 과정에서 앞블록과 합쳐질 경우 bp 변경됨
@@ -113,10 +111,11 @@ int mm_init(void)
 {
     // 메모리 시스템에서 4워드를 가져와서 빈 가용 리스트를 만들 수 있도록 이들을 초기화 한다.
     //시스템콜 = mem_sbrk
-    char *heap_listp;
+    // char *heap_listp;
     if((heap_listp = mem_sbrk(4*WSIZE)) == (void *) -1){ // 할당이 안된 경우,
         return -1;
     }
+
     //힙영역에서 시작 = 프롤로그 
     // 끝 = 에필로그
     PUT(heap_listp, 0); // 정렬패딩  : 맨 앞자리에 0을 집어 넣은것임.
@@ -134,7 +133,7 @@ int mm_init(void)
         return -1;
     }
     //last_bp 초기화
-     last_bp = heap_listp;
+    last_bp = heap_listp;
     return 0;
 }
 
@@ -223,22 +222,10 @@ static void place(void *bp, size_t asize){
 }
 
 static void *find_fit(size_t asize)
-// {
-//     // first-fit search
-//     void *bp;
-//     char *heap_listp;
 
-//     for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)){
-//         if( !GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp)))){
-//             return bp;
-//         }
-//     }
-//     return NULL; // no fit
-// }
 //처음부터 끝까지 탐색 = 퍼스트핏
-// 넥스트핏 ==할당한 지점을 포인터로 따로 저장을 해두고,그 다음부터를 찾는것 끝까지 갓는데 자리가업서..
-//근데 기존에 있던것중 프리가 된게 있을 수 있으니, 처음부터 저장했던 포인터까지 다시탐색
-// while 2개
+
+
 // {
 //     void *bp = mem_heap_lo() + 2 * WSIZE; // 첫번째 블록(주소: 힙의 첫 부분 + 8bytes)부터 탐색 시작
 //     while (GET_SIZE(HDRP(bp)) > 0)
@@ -249,17 +236,36 @@ static void *find_fit(size_t asize)
 //     }
 //     return NULL;
 // }
+
+// next fit ==할당한 지점을 포인터로 따로 저장을 해두고,그 다음부터를 찾는것 끝까지 갓는데 자리가업서..
+//근데 기존에 있던것중 프리가 된게 있을 수 있으니, 처음부터 저장했던 포인터까지 다시탐색
 {
     //탐색을 하고 할당을 한 뒤에
-    void *bp;
-    for(bp = last_bp; GET_SIZE(HDRP(bp))>0; bp=NEXT_BLKP(bp)){
-        if(!GET_ALLOC(HDRP(bp))&& (asize <= GET_SIZE(HDRP(bp)))){
-            return bp;
-        }
-       
+  //next-fit 포인터에서 탐색 시작
+  void *bp;
+  //last_bp 이후에
+  for(bp = last_bp; GET_SIZE(HDRP(bp))>0; bp = NEXT_BLKP(bp)){
+    if(!GET_ALLOC(HDRP(bp)) && asize <= GET_SIZE(HDRP(bp))){
+        return bp;
     }
-     return NULL;
+  }
+  //last_bp 부터 탐색햿는데 못찾았을 경우는 처음부터 탐색한다.
+//   printf("%p", heap_listp);
+  for(bp = heap_listp; HDRP(bp)!=HDRP(last_bp); bp = NEXT_BLKP(bp)){
+    if(!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp)))){
+        return bp;
+    }
+  }
+//   for(bp = last_bp;)
+return NULL;
 }
+
+// {
+//     void *bp;
+//     void *best_fit = NULL;
+
+//     for(bp = heap_listp;  )
+// }
 
 
 /*
@@ -339,17 +345,3 @@ void *mm_realloc(void *ptr, size_t size)
     mm_free(oldptr);
     return newptr;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
