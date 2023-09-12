@@ -64,7 +64,7 @@ team_t team = {
 #define PACK(size, alloc) ((size) | (alloc)) // size와 할당 비트를 결합, header와 footer에 저장할값
 
 #define GET(p) (*(unsigned int *)(p)) // p가 참조하는 워드 반환 (포인터라서 직접 역참조 불가능 ->타입캐스팅 )
-#define PUT(p,val) (*(unsigned int *)(p) = (val)) // p에 val 저장
+#define PUT(p,val) (*(unsigned int *)(p) = (unsigned int)(val)) // p에 val 저장
 
 // 각 주소 p에 있는 헤더 또는 푸터의 사이즈와 할당 비트를 리턴한다.
 #define GET_SIZE(p) (GET(p) & ~0x7) // 사이즈 (~0x7 : ...11111000, '&'연산으로 뒤에 세자리 없어짐) 16진수인 0x7을 2진수로 바꾸면 1111이라 ~연산자를 사용해서 뒷자리를 전부 0으로 바꾸는것임
@@ -75,6 +75,8 @@ team_t team = {
 #define FTRP(bp) ((char *)(bp) + GET_SIZE(HDRP(bp)) - DSIZE) // footer 포인터(헤더의 정보를 참조해서 가져오기 때문에, 
 //헤더의 정보를 변경했다면 변경된 위치의 footer 가 반환됨
 //ㅡ다음 블록의 블록 포인터, 이전 블록의 블록 포인터
+
+// for explicit free list
 #define NEXT_BLKP(bp) ((char *)(bp) + GET_SIZE(((char *)(bp)-WSIZE))) // 다음 블록의 포인터
 #define PREV_BLKP(bp) ((char *)(bp)-GET_SIZE(((char *)(bp)-DSIZE)))   // 이전 블록의 포인터
 #define GET_SUCC(bp) (*(void **)((char *)(bp) + WSIZE)) // 다음 가용 블록의 주소
@@ -93,26 +95,25 @@ static char *free_listp;
 
 static void splice_free_block(void *bp); // 가용 리스트에서 제거
 static void add_free_block(void *bp);    // 가용 리스트에 추가
-
+static void *heap_listp;
 int mm_init(void)
 {
-      
-    // 메모리 시스템에서 4워드를 가져와서 빈 가용 리스트를 만들 수 있도록 이들을 초기화 한다.
-   if ((free_listp = mem_sbrk(8 * WSIZE)) == (void *)-1) // 8워드 크기의 힙 생성, free_listp에 힙의 시작 주소값 할당(가용 블록만 추적)
+    // 힙 초기화하기 (시스템 호출이 실패하면 -1을 반환함)
+    if ((heap_listp = mem_sbrk(6 * WSIZE)) == (void *)-1)
         return -1;
-    PUT(free_listp, 0);                                // 정렬 패딩
-    PUT(free_listp + (1 * WSIZE), PACK(2 * WSIZE, 1)); // 프롤로그 Header
-    PUT(free_listp + (2 * WSIZE), PACK(2 * WSIZE, 1)); // 프롤로그 Footer
-    PUT(free_listp + (3 * WSIZE), PACK(4 * WSIZE, 0)); // 첫 가용 블록의 헤더
-    PUT(free_listp + (4 * WSIZE), NULL);               // 이전 가용 블록의 주소
-    PUT(free_listp + (5 * WSIZE), NULL);               // 다음 가용 블록의 주소
-    PUT(free_listp + (6 * WSIZE), PACK(4 * WSIZE, 0)); // 첫 가용 블록의 푸터
-    PUT(free_listp + (7 * WSIZE), PACK(0, 1));         // 에필로그 Header: 프로그램이 할당한 마지막 블록의 뒤에 위치하며, 블록이 할당되지 않은 상태를 나타냄
 
-    free_listp += (4 * WSIZE); // 첫번째 가용 블록의 bp
+    PUT(heap_listp, 0);                              // Alignment padding (힙의 시작주소에 0 할당)
+    PUT(heap_listp + WSIZE, PACK(4 * WSIZE, 1));     // 프롤로그 헤더 16/1
+    PUT(heap_listp + 2 * WSIZE, NULL);               // 프롤로그 PRED 포인터 NULL로 초기화
+    PUT(heap_listp + 3 * WSIZE, NULL);               // 프롤로그 SUCC 포인터 NULL로 초기화
+    PUT(heap_listp + 4 * WSIZE, PACK(4 * WSIZE, 1)); // 프롤로그 풋터 16/1
+    PUT(heap_listp + 5 * WSIZE, PACK(0, 1));         // 에필로그 헤더 0/1
 
-    // 힙을 CHUNKSIZE bytes로 확장
-    if (extend_heap(CHUNKSIZE / WSIZE) == NULL)
+    // 에필로그 블록의 주소를 명시적 가용 리스트의 head로 설정
+    free_listp = heap_listp + DSIZE;
+
+    // CHUCKSIZE만큼 힙 확장시키기
+    if (extend_heap(CHUNKSIZE / WSIZE) == NULL) // word가 몇개인지 확인해서 넣으려고(DSIZE로 나눠도 됨)
         return -1;
 
     return 0;
