@@ -311,3 +311,5 @@ int get_class(size_t size)
     // 주어진 크기가 8192바이트 이상인 경우, 마지막 클래스로 처리
     return SEGREGATE_SIZE - 1;
 }
+
+printf('커밋테스트');
